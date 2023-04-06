@@ -3,14 +3,14 @@ const { response, json } = require('express');
 const express = require('express');
 const mongoose = require('mongoose');
 const { Configuration, OpenAIApi } = require("openai");
-
+const cors = require('cors');
 //Api Configuration
 const config = new Configuration({
-    apiKey:  "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"
+    apiKey:  "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"
 });
 
 //Connection to mongo DB
-mongoose.connect('mongodb://127.0.0.1:27017/test').then(()=> {
+mongoose.connect('mongodb+srv://afmtoday:OlxwPFCF0rLMnA3e@cluster0.edrrjyh.mongodb.net/awaqi?retryWrites=true&w=majority').then(()=> {
         console.log("Connected to Database")
     }).catch(err =>{
         console.log("An error has occured when tring to connect to database! ")
@@ -46,8 +46,8 @@ const app = express();
 const openai = new OpenAIApi(config);
 
 //Json response and replay compatability
-app.use(express.json())
-
+app.use(express.json());
+app.use(cors());
 //Session Trial
 let sessionTrial = 5;
 
@@ -94,22 +94,33 @@ app.get('/api/skills/:job', (req, res) =>{
             //Call Ai function
             requestAi(`Return a list of skills that a ${job} 
             has in the form of a javascript list
-            like ["item1", "item2", "item3"], do not use single quotes.`,sessionTrial, 
+            like ["item1", "item2", "item3"], do not use single quotes for the items.`,sessionTrial, 
             (answer)=> {
                     
                 //Store data if returned from the Ai
                 if (answer !== '["The Ai is too Crowded!"]'){
+                    
+
                     jobTitle.updateOne({job:`${job}`},{skillset:`${answer}`}).then((data)=>{
                         if(data.matchedCount == 0){
                             jobTitle.insertMany({jobtitle:`${job}`, skillset:`${answer}`})
                             }
+
                     });
             }
 
             //Return Ai answer
+            try{
             answer = JSON.parse((answer));
-            res.send(answer);
+            }
+            catch(err) {
+                res.send(["Busy"])
+            };
 
+
+
+            try{res.send(answer);}
+                catch(err){}
         });
         }
     });
@@ -121,9 +132,22 @@ app.get('/api/skills/:job', (req, res) =>{
 //GET mapping to return short summaries of a cetain job
 app.get('/api/paragraph/:job', (req, res) =>{
     const job = (req.params.job).toUpperCase();
-    requestAi(`Write 4 different, short, atleast 4 sentence long Cv summaries for 
+    jobTitle.find({jobtitle:`${job}`, paragraph : {$exists:true}}).then(data => {
+
+        //Parse and return if it exists
+        if (data[0] != undefined){
+            answer = JSON.parse(JSON.stringify((data[0].paragraph).split('|,')));
+            res.send(answer);
+        }
+
+else{
+
+    requestAi(`Write 3 different, short, atleast 4 sentence long Cv summaries for 
                a ${job} and return it in the form of a javascript list like 
-               ["paragraph1","paragraph2","paragraph3", ...], do not use single quotes.`
+               ["paragraph1|","paragraph2|","paragraph3|", ...], do not use 
+               single quotes for the paragraphs, always use double quotes, 
+               put '|' at the end of every paragraph inside the quotes.`
+
                ,sessionTrial, (answer)=> {
 
                     if (answer !== '["The Ai is too Crowded!"]'){
@@ -133,15 +157,20 @@ app.get('/api/paragraph/:job', (req, res) =>{
                                 }
                         });
                     }
-
-    answer = JSON.parse(answer);
-    +
-    res.send(answer);
+    try{
+    answer = JSON.parse((answer)) }      
+     catch(err) {
+        console.log(err);
+        res.send(["Busy"])
+    };
+    try{
+    res.send(answer);}
+    catch(err){}
 
     });
-
+}
 });
-
+});
 
 //Post mapping to store users details
 app.post('/api/addperson',(req, res)=>{
@@ -156,6 +185,7 @@ app.post('/api/addperson',(req, res)=>{
 });
 
 //Main listening post
-app.listen("3000", ()=>{
-    console.log("Running on port 3000")
+const PORT = process.env.PORT || 3000;
+app.listen(`${PORT}`, ()=>{
+    console.log(`Running on port ${PORT}`)
 });
