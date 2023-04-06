@@ -6,7 +6,7 @@ const { Configuration, OpenAIApi } = require("openai");
 const cors = require('cors');
 //Api Configuration
 const config = new Configuration({
-    apiKey:  "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"
+    apiKey:  "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"
 });
 
 //Connection to mongo DB
