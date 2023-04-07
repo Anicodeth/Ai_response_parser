@@ -1,5 +1,5 @@
 //Imports of required packages
-const { response, json } = require('express');
+
 const express = require('express');
 const mongoose = require('mongoose');
 const { Configuration, OpenAIApi } = require("openai");
@@ -28,18 +28,18 @@ const jobTitleSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema(
         {
-
             fname:String,
             lname:String,
             jobtitle:String,
             phone:String,
             email:String
-
         });
 
 //Collection connection
 const jobTitle = mongoose.model('Jobtitle', jobTitleSchema);
 const user = mongoose.model('user', userSchema);
+
+
 
 //Express and OpenAi Configuration
 const app = express();
@@ -75,6 +75,47 @@ const requestAi =async (prompt, sessionTrial, callback) => {
         }
     }
 
+    
+
+async function findCommonSkills() {
+
+  data = await jobTitle.find({jobtitle:'Common', skillset:{$exists:true}})
+
+            answer = JSON.parse(JSON.stringify((data[0].skillset).split(',')));
+                const min = 0;
+                const max = answer.length -5;
+                const sliceStart = Math.floor(Math.random() * (max - min + 1)) + min;
+                    if (sliceStart + 20 < max){
+                        answer = answer.slice(sliceStart, sliceStart + 20 )
+                    }
+                    else {
+                        answer = answer.slice(sliceStart, answer.length-1);
+                    }
+            return answer
+ 
+        }
+
+  
+    
+
+
+async function findCommonParagraphs() {
+
+
+    data = await jobTitle.find({jobtitle:'Common', paragraph:{$exists:true}})
+
+    answer = JSON.parse(JSON.stringify((data[0].paragraph).split('|,')));
+        const min = 0;
+        const max = answer.length - 5;
+        const sliceStart = Math.floor(Math.random() * (max - min + 1)) + min;
+            if (sliceStart + 3 < max){
+                answer = answer.slice(sliceStart, sliceStart + 3 )
+            }
+            else {
+                answer = answer.slice(sliceStart, answer.length-1);
+            }
+    return answer
+    }
 
 //GET mapping to return skills of a cetain job
 app.get('/api/skills/:job', (req, res) =>{
@@ -95,12 +136,10 @@ app.get('/api/skills/:job', (req, res) =>{
             requestAi(`Return a list of skills that a ${job} 
             has in the form of a javascript list
             like ["item1", "item2", "item3"], do not use single quotes for the items.`,sessionTrial, 
-            (answer)=> {
+            async (answer)=> {
                     
                 //Store data if returned from the Ai
                 if (answer !== '["The Ai is too Crowded!"]'){
-                    
-
                     jobTitle.updateOne({job:`${job}`},{skillset:`${answer}`}).then((data)=>{
                         if(data.matchedCount == 0){
                             jobTitle.insertMany({jobtitle:`${job}`, skillset:`${answer}`})
@@ -108,13 +147,19 @@ app.get('/api/skills/:job', (req, res) =>{
 
                     });
             }
+            else {
+                answer = await findCommonSkills();
+                res.send(answer);
+            }
 
             //Return Ai answer
             try{
             answer = JSON.parse((answer));
             }
             catch(err) {
-                res.send(["Busy"])
+                answer = await findCommonSkills();
+                try{res.send(answer);}
+                catch(e){}
             };
 
 
@@ -148,7 +193,7 @@ else{
                single quotes for the paragraphs, always use double quotes, 
                put '|' at the end of every paragraph inside the quotes.`
 
-               ,sessionTrial, (answer)=> {
+               ,sessionTrial, async (answer)=> {
 
                     if (answer !== '["The Ai is too Crowded!"]'){
                         jobTitle.updateOne({job:`${job}`},{paragraph:`${answer}`}).then((data)=>{
@@ -156,18 +201,24 @@ else{
                                 jobTitle.insertMany({jobtitle:`${job}`, paragraph:`${answer}`})
                                 }
                         });
+                      }
+                    else {
+                        answer = await findCommonParagraphs();
+                        res.send(answer);
                     }
-    try{
-    answer = JSON.parse((answer)) }      
+     try{
+        answer = JSON.parse((answer)) }      
      catch(err) {
         console.log(err);
-        res.send(["Busy"])
-    };
+        try{
+        res.send( await findCommonParagraphs());
+        }catch(e){}}
+
     try{
     res.send(answer);}
     catch(err){}
 
-    });
+     });
 }
 });
 });
